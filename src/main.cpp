@@ -55,6 +55,7 @@ lv_obj_t *mount_btn_label;
 bool usb_connected = false;
 bool last_usb_state = false;
 bool usb_was_connected_before_mount = false;  // Track USB state before mounting
+bool usb_was_ever_mounted = false;
 
 // ───────── Mount State ─────────
 bool sd_card_mounted = false;
@@ -86,6 +87,10 @@ float lastCPUUsage = 0.0;
 
 // ───────── USB Detection Function ─────────
 bool isUSBConnected() {
+    // If USB was ever mounted, return true
+    if (usb_was_ever_mounted) {
+        return true;
+    }
     // If SD card is mounted, return the preserved USB state
     if (sd_card_mounted) {
         return usb_was_connected_before_mount;
@@ -175,6 +180,8 @@ static void mount_btn_event_handler(lv_event_t * e) {
         usb_was_connected_before_mount = usb_connected;  // Preserve USB state
         
         Storage::mount();
+
+        usb_was_ever_mounted = true;
         
     } else if (usb_connected && sd_card_mounted) {
         // Already mounted - Unmount SD Card action
