@@ -11,6 +11,7 @@
 #include <FS.h>
 #include <driver/usb_serial_jtag.h>
 #include <Storage.h>
+#include <WiFi.h>
 
 // ───────── Visuals ─────────
 #define COLOR_GREY_BTN   0x666666

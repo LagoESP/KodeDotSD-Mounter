@@ -133,7 +133,20 @@ bool mount() {
 
 void unmount() {
   if (!s_mounted) return;
-  ESP.restart();
+
+  // Tell the host the drive is going away, then stop MSC and free the SD bus.
+  // These APIs are the officially documented way to remove MSC. 
+  s_msc.mediaPresent(false);     // signal “no media” to host first
+  delay(50);                     // short debounce window for host to close handles
+  s_msc.end();                   // release MSC class resources
+  delay(10);
+  SD_MMC.end();                  // release SDMMC bus/pins
+
+  s_mounted = false;
+
+  // NOTE: We intentionally DO NOT call any “USB end” here.
+  // Arduino-ESP32 documents MSC::end() but USB has only begin()+events;
+  // keeping USB active preserves event notifications for future mounts.
 }
 
 bool isMounted()   { return s_mounted; }
