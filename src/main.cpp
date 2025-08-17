@@ -11,7 +11,7 @@
 #include <FS.h>
 #include <driver/usb_serial_jtag.h>
 #include <Storage.h>
-#include <WiFi.h>
+#include <Adafruit_NeoPixel.h>
 
 // ───────── Visuals ─────────
 #define COLOR_GREY_BTN   0x666666
@@ -20,6 +20,7 @@
 #define COLOR_GREEN      0x4CAF50
 #define COLOR_WHITE      0xFFFFFF
 #define COLOR_RED        0xFF6B6B
+#define COLOR_PURE_GREEN 0x00FF00  // Pure green for NeoPixel
 
 // Include Inter fonts and logo
 extern const lv_font_t Inter_50;
@@ -29,6 +30,9 @@ extern const lv_image_dsc_t logotipo;
 
 // Display manager
 DisplayManager display;
+
+// NeoPixel control
+Adafruit_NeoPixel *pixels;
 
 // ───────── SD card info struct ─────────
 struct SDCardInfo {
@@ -72,6 +76,7 @@ void updateCPUDisplay();
 float getCurrentCPUUsage();
 void updateMountButtonState();
 bool isUSBConnected();
+void updateNeoPixel(uint32_t color);
 
 // ───────── Timing ─────────
 unsigned long lastRefreshTime = 0;
@@ -104,6 +109,12 @@ bool isUSBConnected() {
 void setup() {
     Serial.begin(115200);
     Serial.println("SD Card Info Display with USB Detection starting...");
+    
+    // Initialize NeoPixel
+    pixels = new Adafruit_NeoPixel(NEO_PIXEL_COUNT, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
+    pixels->begin();
+    pixels->clear();
+    pixels->show();
     
     if (!display.init()) {
         Serial.println("Error: Failed to initialize display");
@@ -175,6 +186,9 @@ static void mount_btn_event_handler(lv_event_t * e) {
         lv_obj_set_style_text_color(mount_btn_label, lv_color_hex(COLOR_WHITE), 0);
         lv_label_set_text(mount_btn_label, "Unmount SD Card");
         
+        // Set NeoPixel to pure green
+        updateNeoPixel(COLOR_PURE_GREEN);
+        
         // Set mount state
         sd_card_mounted = true;
         usb_was_connected_before_mount = usb_connected;  // Preserve USB state
@@ -197,7 +211,7 @@ static void mount_btn_event_handler(lv_event_t * e) {
         // Restore normal display
         refreshSDCardInfo();
         
-        // Update button back to "Mount SD Card"
+        // Update button back to "Mount SD Card" (this will also update NeoPixel to orange)
         updateMountButtonState();
         
     } else {
@@ -216,6 +230,9 @@ void updateMountButtonState() {
         lv_label_set_text(mount_btn_label, "Mount SD Card");
         lv_obj_clear_state(mount_btn, LV_STATE_DISABLED);
         
+        // Set NeoPixel to orange
+        updateNeoPixel(COLOR_ORANGE);
+        
     } else if (usb_connected && sd_card_mounted) {
         // USB connected, already mounted: Green button with "Unmount SD Card"
         lv_obj_set_style_bg_color(mount_btn, lv_color_hex(COLOR_GREEN), 0);
@@ -223,12 +240,18 @@ void updateMountButtonState() {
         lv_label_set_text(mount_btn_label, "Unmount SD Card");
         lv_obj_clear_state(mount_btn, LV_STATE_DISABLED);
         
+        // Set NeoPixel to pure green
+        updateNeoPixel(COLOR_PURE_GREEN);
+        
     } else {
         // USB not connected: Grey button with "Connect USB C to PC"
         lv_obj_set_style_bg_color(mount_btn, lv_color_hex(COLOR_GREY_BTN), 0);
         lv_obj_set_style_text_color(mount_btn_label, lv_color_hex(COLOR_GREY_TEXT), 0);
         lv_label_set_text(mount_btn_label, "Connect USB C to PC");
         lv_obj_clear_state(mount_btn, LV_STATE_DISABLED);
+        
+        // Turn off NeoPixel
+        updateNeoPixel(0x000000);
         
         // Reset mount state when USB disconnects
         if (sd_card_mounted) {
@@ -351,9 +374,8 @@ void refreshSDCardInfo() {
 
 SDCardInfo getSDCardInfo() {
     SDCardInfo info;
-    const int clk = 6, cmd = 5, d0 = 7;  // Kode Dot wiring (1-bit)
     
-    if (!SD_MMC.setPins(clk, cmd, d0)) {
+    if (!SD_MMC.setPins(SD_PIN_CLK, SD_PIN_CMD, SD_PIN_D0)) {
         info.detected = false;
         return info;
     }
@@ -409,6 +431,24 @@ String formatBytes(uint64_t bytes) {
         return String(kb, 1) + " KB";
     } else {
         return String(bytes) + " B";
+    }
+}
+
+// ───────── NeoPixel Control ─────────
+void updateNeoPixel(uint32_t color) {
+    if (pixels) {
+        // Set color with very low brightness (divide RGB values by 16 for 6.25% brightness)
+        uint8_t r = (color >> 16) & 0xFF;
+        uint8_t g = (color >> 8) & 0xFF;
+        uint8_t b = color & 0xFF;
+        
+        r = r / 16;
+        g = g / 16;
+        b = b / 16;
+        
+        // Use RGB color order (Red, Green, Blue) - the Adafruit library handles the GRB conversion
+        pixels->setPixelColor(0, pixels->Color(r, g, b));
+        pixels->show();
     }
 }
 

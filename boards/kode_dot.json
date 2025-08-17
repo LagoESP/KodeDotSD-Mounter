@@ -2,10 +2,10 @@
   "build": {
     "arduino":{
       "ldscript": "esp32s3_out.ld",
-      "partitions": "partitions_app.csv"
+      "partitions": "partitions_app.csv",
+      "memory_type": "opi_opi"
     },
     "core": "esp32",
-    "memory_type": "opi_opi",
     "extra_flags": [
       "-DARDUINO_ESP32S3_DEV",
       "-DARDUINO_USB_MODE=1",
