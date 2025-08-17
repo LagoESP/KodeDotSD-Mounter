@@ -223,8 +223,19 @@ static void mount_btn_event_handler(lv_event_t * e) {
 
 
 void updateMountButtonState() {
-    if (usb_connected && !sd_card_mounted) {
-        // USB connected, not mounted: Orange button with "Mount SD Card"
+    // First check if SD card is detected
+    bool sd_card_detected = false;
+    if (!sd_card_mounted) {
+        // Only check SD card if not currently mounted
+        // We'll get this info from refreshSDCardInfo which runs every 500ms
+        SDCardInfo temp_info = getSDCardInfo();
+        sd_card_detected = temp_info.detected;
+    } else {
+        sd_card_detected = true; // If mounted, we know it was detected
+    }
+    
+    if (usb_connected && !sd_card_mounted && sd_card_detected) {
+        // USB connected, SD card detected, not mounted: Orange button with "Mount SD Card"
         lv_obj_set_style_bg_color(mount_btn, lv_color_hex(COLOR_ORANGE), 0);
         lv_obj_set_style_text_color(mount_btn_label, lv_color_hex(COLOR_WHITE), 0);
         lv_label_set_text(mount_btn_label, "Mount SD Card");
@@ -232,6 +243,16 @@ void updateMountButtonState() {
         
         // Set NeoPixel to orange
         updateNeoPixel(COLOR_ORANGE);
+        
+    } else if (usb_connected && !sd_card_mounted && !sd_card_detected) {
+        // USB connected, no SD card detected: Grey button with "No SD Card"
+        lv_obj_set_style_bg_color(mount_btn, lv_color_hex(COLOR_GREY_BTN), 0);
+        lv_obj_set_style_text_color(mount_btn_label, lv_color_hex(COLOR_GREY_TEXT), 0);
+        lv_label_set_text(mount_btn_label, "No SD Card");
+        lv_obj_add_state(mount_btn, LV_STATE_DISABLED);
+        
+        // Turn off NeoPixel
+        updateNeoPixel(0x000000);
         
     } else if (usb_connected && sd_card_mounted) {
         // USB connected, already mounted: Green button with "Unmount SD Card"
@@ -341,7 +362,30 @@ void refreshSDCardInfo() {
         return;
     }
     
+    // Check SD card presence and update button state if needed
+    static bool last_sd_present = true;  // Assume SD card is present initially
+    bool current_sd_present = false;
+    
     SDCardInfo info = getSDCardInfo();
+    current_sd_present = info.detected;
+    
+    // If SD card presence changed, update the button state
+    if (current_sd_present != last_sd_present) {
+        if (current_sd_present) {
+            Serial.println("SD Card Inserted!");
+        } else {
+            Serial.println("SD Card Removed!");
+            // If SD card was removed while mounted, unmount it
+            if (sd_card_mounted) {
+                sd_card_mounted = false;
+                usb_was_connected_before_mount = false;
+                Storage::unmount();
+                Serial.println("SD Card unmounted due to removal");
+            }
+        }
+        updateMountButtonState();
+        last_sd_present = current_sd_present;
+    }
     
     if (!info.detected) {
         lv_label_set_text(status_label, "No SD Card Found");
@@ -467,14 +511,22 @@ float calculateCPUUsage() {
 
     if (t - lastUpdateTime < 1000) return lastCPUUsage;
 
-    float baseLoad = 12.0;
+    // Calculate base CPU load (ESP32-S3 typically has some background activity)
+    float baseLoad = 8.0;
+    
+    // Calculate heap usage impact (more memory usage = slightly higher CPU)
     size_t totalHeap = 512 * 1024;
     float heapUsagePercent = ((float)(totalHeap - freeHeap) / (float)totalHeap) * 100.0;
-    float activityLoad = heapUsagePercent * 0.3;
-
-    float est = baseLoad + activityLoad;
-    float variation = (float)(millis() % 61) / 10.0 - 3.0;
-    est = constrain(est + variation, 5.0f, 95.0f);
+    float heapLoad = heapUsagePercent * 0.1; // Reduced impact
+    
+    // Add some realistic variation based on time
+    float timeVariation = sin((float)(millis() % 30000) / 30000.0 * 2 * PI) * 3.0;
+    
+    // Calculate final CPU usage
+    float est = baseLoad + heapLoad + timeVariation;
+    
+    // Constrain to realistic ESP32-S3 values
+    est = constrain(est, 3.0f, 25.0f);
 
     lastFreeHeap = freeHeap;
     lastUpdateTime = t;

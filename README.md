@@ -15,6 +15,7 @@ A comprehensive SD Card information display application for the Kode Dot ESP32-S
 - **SD Card Mounting**: One-touch mounting/unmounting of SD card for file transfer
 - **State Preservation**: Maintains USB connection state during mount operations
 - **Safe Unmounting**: Proper cleanup when disconnecting USB
+- **Smart Button States**: Button automatically disables when no SD card is detected
 
 ### 💡 Visual Status Indicators
 - **NeoPixel LED Feedback**: RGB LED that changes color based on system status
@@ -91,15 +92,19 @@ pio device monitor
 
 #### 🔌 USB Mass Storage Mode
 1. **Connect USB**: Plug USB-C cable into your computer
-2. **Mount SD Card**: Press the orange "Mount SD Card" button
-3. **File Transfer**: Access the SD card as a removable drive on your computer
-4. **Unmount**: Press the green "Unmount SD Card" button when done
-5. **Safe Removal**: Unplug USB cable
+2. **Check Button State**: 
+   - **Orange "Mount SD Card"**: SD card detected, ready to mount
+   - **Grey "No SD Card"**: No SD card detected (button disabled)
+   - **Grey "Connect USB C to PC"**: No USB connection
+3. **Mount SD Card**: Press the orange "Mount SD Card" button
+4. **File Transfer**: Access the SD card as a removable drive on your computer
+5. **Unmount**: Press the green "Unmount SD Card" button when done
+6. **Safe Removal**: Unplug USB cable
 
 #### 💡 LED Status Guide
-- **Orange LED**: Ready to mount SD card (USB connected)
+- **Orange LED**: Ready to mount SD card (USB connected, SD card detected)
 - **Green LED**: SD card mounted and accessible
-- **No LED**: No USB connection
+- **No LED**: No USB connection or no SD card detected
 
 ### 🔍 Monitoring and Debugging
 - **Serial Monitor**: Connect at 115200 baud for detailed logging
