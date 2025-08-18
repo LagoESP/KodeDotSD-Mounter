@@ -1,6 +1,6 @@
 /**
  * SD Card Information Display for Kode Dot
- * Simple display of SD card metrics and CPU usage with USB detection.
+ * Simple display of SD card metrics with USB detection.
  */
 /* ───────── KODE | docs.kode.diy ───────── */
 #include <Arduino.h>
@@ -51,7 +51,7 @@ lv_obj_t *storage_label;
 lv_obj_t *folders_label;
 lv_obj_t *root_files_label;
 lv_obj_t *total_files_label;
-lv_obj_t *cpu_label;
+
 lv_obj_t *mount_btn;
 lv_obj_t *mount_btn_label;
 
@@ -70,25 +70,20 @@ void refreshSDCardInfo();
 SDCardInfo getSDCardInfo();
 void countFilesAndFolders(const char* path, SDCardInfo& info, bool isRoot = false);
 String formatBytes(uint64_t bytes);
-void logCPUUsage();
-float calculateCPUUsage();
-void updateCPUDisplay();
-float getCurrentCPUUsage();
+
 void updateMountButtonState();
 bool isUSBConnected();
 void updateNeoPixel(uint32_t color);
 
 // ───────── Timing ─────────
 unsigned long lastRefreshTime = 0;
-unsigned long lastCPULogTime = 0;
+
 unsigned long lastUSBCheckTime = 0;
 const unsigned long REFRESH_INTERVAL = 500;
-const unsigned long CPU_LOG_INTERVAL = 2000;
+
 const unsigned long USB_CHECK_INTERVAL = 100;  // Check USB every 100ms
 
-// ───────── CPU ─────────
-unsigned long lastCPUUpdateTime = 0;
-float lastCPUUsage = 0.0;
+
 
 // ───────── USB Detection Function ─────────
 bool isUSBConnected() {
@@ -156,11 +151,7 @@ void loop() {
         lastRefreshTime = now;
     }
 
-    if (now - lastCPULogTime >= CPU_LOG_INTERVAL) {
-        logCPUUsage();
-        updateCPUDisplay();
-        lastCPULogTime = now;
-    }
+
     
     delay(5);
 }
@@ -283,8 +274,7 @@ void updateMountButtonState() {
         }
     }
     
-    // Ensure CPU label is always visible
-    lv_obj_clear_flag(cpu_label, LV_OBJ_FLAG_HIDDEN);
+
 }
 
 
@@ -322,11 +312,7 @@ void createSDCardScreen() {
     lv_obj_set_style_text_font(total_files_label, &Inter_20, 0);
     lv_obj_align(total_files_label, LV_ALIGN_TOP_MID, 0, 230);
 
-    cpu_label = lv_label_create(scr);
-    lv_obj_set_style_text_color(cpu_label, lv_color_hex(0x999999), 0);
-    lv_obj_set_style_text_font(cpu_label, &Inter_20, 0);
-    lv_obj_align(cpu_label, LV_ALIGN_TOP_MID, 0, 260);
-    lv_label_set_text(cpu_label, "CPU Usage: --.--%");
+
 
     // Button with dynamic behavior
     mount_btn = lv_btn_create(scr);
@@ -346,7 +332,7 @@ void createSDCardScreen() {
     updateMountButtonState();
     
     refreshSDCardInfo();
-    lastCPUUpdateTime = millis();
+
 }
 
 void refreshSDCardInfo() {
@@ -358,7 +344,7 @@ void refreshSDCardInfo() {
         lv_obj_add_flag(folders_label, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(root_files_label, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(total_files_label, LV_OBJ_FLAG_HIDDEN);
-        // CPU label remains visible
+
         return;
     }
     
@@ -394,7 +380,7 @@ void refreshSDCardInfo() {
         lv_obj_add_flag(folders_label, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(root_files_label, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(total_files_label, LV_OBJ_FLAG_HIDDEN);
-        // CPU label remains visible
+
     } else {
         lv_label_set_text(status_label, "SD Card Detected");
         lv_obj_set_style_text_color(status_label, lv_color_hex(COLOR_GREEN), 0);
@@ -402,7 +388,7 @@ void refreshSDCardInfo() {
         lv_obj_clear_flag(folders_label, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(root_files_label, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(total_files_label, LV_OBJ_FLAG_HIDDEN);
-        // CPU label remains visible
+
 
         uint64_t freeBytes = info.totalBytes - info.usedBytes;
         float freePct = (info.totalBytes > 0) ? ((float)freeBytes / (float)info.totalBytes) * 100.0f : 0.0f;
@@ -496,57 +482,4 @@ void updateNeoPixel(uint32_t color) {
     }
 }
 
-// ───────── CPU Usage ─────────
-float calculateCPUUsage() {
-    static size_t lastFreeHeap = 0;
-    static unsigned long lastUpdateTime = 0;
-    unsigned long t = millis();
-    size_t freeHeap = esp_get_free_heap_size();
 
-    if (lastUpdateTime == 0) {
-        lastFreeHeap = freeHeap;
-        lastUpdateTime = t;
-        return 15.0;
-    }
-
-    if (t - lastUpdateTime < 1000) return lastCPUUsage;
-
-    // Calculate base CPU load (ESP32-S3 typically has some background activity)
-    float baseLoad = 8.0;
-    
-    // Calculate heap usage impact (more memory usage = slightly higher CPU)
-    size_t totalHeap = 512 * 1024;
-    float heapUsagePercent = ((float)(totalHeap - freeHeap) / (float)totalHeap) * 100.0;
-    float heapLoad = heapUsagePercent * 0.1; // Reduced impact
-    
-    // Add some realistic variation based on time
-    float timeVariation = sin((float)(millis() % 30000) / 30000.0 * 2 * PI) * 3.0;
-    
-    // Calculate final CPU usage
-    float est = baseLoad + heapLoad + timeVariation;
-    
-    // Constrain to realistic ESP32-S3 values
-    est = constrain(est, 3.0f, 25.0f);
-
-    lastFreeHeap = freeHeap;
-    lastUpdateTime = t;
-    lastCPUUsage = est;
-    return est;
-}
-
-void logCPUUsage() {
-    Serial.printf("[CPU] Usage: %.1f%% | Free: %u | Uptime: %lu ms\n",
-                  calculateCPUUsage(),
-                  (unsigned)esp_get_free_heap_size(),
-                  millis());
-}
-
-float getCurrentCPUUsage() { 
-    return lastCPUUsage; 
-}
-
-void updateCPUDisplay() {
-    if (!cpu_label || lv_obj_has_flag(cpu_label, LV_OBJ_FLAG_HIDDEN)) return;
-    String cpu_text = "CPU Usage: " + String(getCurrentCPUUsage(), 1) + "%";
-    lv_label_set_text(cpu_label, cpu_text.c_str());
-}
